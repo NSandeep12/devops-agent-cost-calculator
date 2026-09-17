@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS DevOps Agent — Cost Calculator</title>
+<style>
+  :root{
+    --ink:#232f3e; --ink2:#2d3c50; --orange:#ff9900; --orange-d:#ec7211;
+    --bg:#f4f6f8; --card:#fff; --line:#e3e8ee; --txt:#16212f; --muted:#5a6b7b;
+    --green:#1a8754; --red:#d13212; --blue:#0972d3;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Amazon Ember","Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5}
+  header{background:linear-gradient(135deg,var(--ink),var(--ink2));color:#fff;padding:26px 34px;border-bottom:4px solid var(--orange)}
+  header h1{font-size:24px;font-weight:700;letter-spacing:.2px}
+  header p{color:#c6d0da;margin-top:6px;font-size:13px}
+  header .rate-chip{display:inline-block;margin-top:12px;background:rgba(255,153,0,.16);border:1px solid var(--orange);color:var(--orange);padding:5px 12px;border-radius:20px;font-weight:600;font-size:12.5px}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 24px 60px}
+  .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:18px 0 22px;flex-wrap:wrap}
+  .tab{padding:11px 20px;cursor:pointer;font-weight:600;color:var(--muted);border:none;background:none;border-bottom:3px solid transparent;font-size:14px}
+  .tab.active{color:var(--ink);border-bottom-color:var(--orange)}
+  .panel{display:none} .panel.active{display:block}
+  .grid{display:grid;gap:16px}
+  .kpis{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(16,33,47,.05)}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .kpi .value{font-size:27px;font-weight:700;margin-top:6px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:3px}
+  .kpi.gross .value{color:var(--ink)} .kpi.credit .value{color:var(--blue)} .kpi.net .value{color:var(--green)} .kpi.waste .value{color:var(--red)}
+  h2{font-size:16px;margin:26px 0 12px;color:var(--ink);font-weight:700}
+  h2 .hint{font-weight:400;font-size:12.5px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{background:#f7f9fb;color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.4px}
+  tfoot td{font-weight:700;background:#fbfcfd;border-top:2px solid var(--line)}
+  .primary-row{background:#fff8ec}
+  .primary-row td:first-child::after{content:" ★ primary driver";color:var(--orange-d);font-size:10.5px;font-weight:700;letter-spacing:.3px}
+  input,select{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%;background:#fff;color:var(--txt)}
+  input[type=number]{text-align:right}
+  .ctl{display:grid;grid-template-columns:1fr 130px;gap:10px 14px;align-items:center;max-width:460px}
+  .ctl label{color:var(--muted);font-weight:600}
+  .badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700}
+  .b-inv{background:#eaf2fb;color:var(--blue)} .b-eval{background:#fdeee0;color:var(--orange-d)} .b-sre{background:#e8f6ee;color:var(--green)}
+  button.act{background:var(--orange);color:#16212f;border:none;border-radius:7px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:13px}
+  button.ghost{background:#fff;border:1px solid var(--line);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:12px;color:var(--muted);font-weight:600}
+  .rm{color:var(--red);cursor:pointer;font-weight:700;border:none;background:none;font-size:15px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  svg text{font-family:inherit}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .src{font-size:12px;color:var(--muted);line-height:1.7}
+  .src a{color:var(--blue)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>AWS DevOps Agent — Cost Calculator</h1>
+  <p>Model monthly spend across every activity type, apply the AWS Support credit offset, split by team, and project growth driven by code-review volume.</p>
+  <span class="rate-chip">Unified rate: $0.0083 / agent-second (all activity types)</span>
+</header>
+
+<div class="wrap">
+  <p style="background:#fff;border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:8px;padding:12px 16px;margin:2px 0 6px;font-size:13px;color:var(--muted)">
+    <b style="color:var(--txt)">How to use:</b> set your AWS Support plan and monthly Support charge, enter your teams' monthly activity volumes, and read gross → credit → net at the top. Everything recomputes live. Nothing is sent anywhere — this file runs entirely in your browser, so it's safe to download, keep, and share.
+  </p>
+  <div class="tabs">
+    <button class="tab active" data-t="calc">Calculator</button>
+    <button class="tab" data-t="teams">Per-Team Split</button>
+    <button class="tab" data-t="proj">12-Month Projection</button>
+    <button class="tab" data-t="examples">AWS Pricing Examples</button>
+    <button class="tab" data-t="basis">Pricing Basis</button>
+  </div>
+
+  <!-- ============ KPIs (always visible) ============ -->
+  <div class="grid kpis" id="kpis"></div>
+
+  <!-- ============ CALCULATOR ============ -->
+  <div class="panel active" id="calc">
+    <h2>Support credit offset <span class="hint">— credit = plan % × prior-month AWS Support charge, applied at $0.0083/agent-sec, expires month-end</span></h2>
+    <div class="card">
+      <div class="ctl">
+        <label>AWS Support plan</label>
+        <select id="plan">
+          <option value="1.00">Unified Operations — 100%</option>
+          <option value="0.75" selected>Enterprise — 75%</option>
+          <option value="0.30">Business+ — 30%</option>
+          <option value="0">No paid plan — 0%</option>
+        </select>
+        <label>Monthly AWS Support charge ($)</label>
+        <input type="number" id="support" value="10000" min="0" step="500">
+      </div>
+      <p class="note" id="credit-note"></p>
+    </div>
+
+    <h2>Monthly activity volumes <span class="hint">— code review is the primary driver; durations are editable assumptions</span></h2>
+    <div class="card">
+      <table id="activity">
+        <thead><tr>
+          <th>Activity type</th><th>Billing category</th>
+          <th>Volume / mo</th><th>Avg duration (min)</th>
+          <th>Agent-seconds</th><th>Gross cost</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td>Total</td><td></td><td id="tv"></td><td></td><td id="ts"></td><td id="tc"></td></tr></tfoot>
+      </table>
+      <div class="legend">
+        <span><i style="background:#0972d3"></i>Investigations (Incident Response)</span>
+        <span><i style="background:#ec7211"></i>Evaluations (Site Reliability — incl. code review)</span>
+        <span><i style="background:#1a8754"></i>On-demand SRE (Chat &amp; Custom Agents)</span>
+      </div>
+    </div>
+
+    <div class="two" style="margin-top:16px">
+      <div class="card"><h2 style="margin-top:0">Gross cost by activity</h2><div id="barchart"></div></div>
+      <div class="card"><h2 style="margin-top:0">Gross → Credit → Net</h2><div id="waterfall"></div></div>
+    </div>
+  </div>
+
+  <!-- ============ TEAMS ============ -->
+  <div class="panel" id="teams">
+    <h2>Per-team volumes <span class="hint">— code reviews / investigations / evaluations / chats / custom-agent runs per month</span></h2>
+    <div class="card">
+      <table id="teamtbl">
+        <thead><tr>
+          <th>Team</th><th>Code reviews</th><th>Investigations</th><th>Evaluations</th>
+          <th>Chats</th><th>Custom-agent runs</th><th>Gross</th><th>Net share</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td>Total</td><td id="tt-cr"></td><td id="tt-inv"></td><td id="tt-ev"></td><td id="tt-ch"></td><td id="tt-ca"></td><td id="tt-gr"></td><td id="tt-net"></td><td></td></tr></tfoot>
+      </table>
+      <div style="margin-top:12px"><button class="act" id="addteam">+ Add team</button>
+        <span class="note">Net share allocates the org-level credit across teams in proportion to gross usage.</span></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Gross cost by team</h2><div id="teamchart"></div></div>
+  </div>
+
+  <!-- ============ PROJECTION ============ -->
+  <div class="panel" id="proj">
+    <h2>12-month projection <span class="hint">— code-review volume compounds monthly; other activities optional</span></h2>
+    <div class="card">
+      <div class="ctl">
+        <label>Code-review growth / month (%)</label>
+        <input type="number" id="growth" value="8" step="1">
+        <label>Grow other activities too?</label>
+        <select id="growall"><option value="0" selected>No — code review only</option><option value="1">Yes — all at same rate</option></select>
+        <label>Support charge growth / month (%)</label>
+        <input type="number" id="scgrowth" value="0" step="1">
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Gross vs. Net vs. Credit</h2><div id="linechart"></div>
+      <div class="legend">
+        <span><i style="background:#232f3e"></i>Gross</span>
+        <span><i style="background:#1a8754"></i>Net (after credit)</span>
+        <span><i style="background:#0972d3"></i>Credit available</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><table id="projtbl">
+      <thead><tr><th>Month</th><th>Code reviews</th><th>Gross</th><th>Credit</th><th>Net</th><th>Credit wasted</th></tr></thead>
+      <tbody></tbody>
+      <tfoot><tr><td>12-mo total</td><td></td><td id="p-gr"></td><td></td><td id="p-net"></td><td id="p-waste"></td></tr></tfoot>
+    </table></div>
+  </div>
+
+  <!-- ============ AWS PRICING EXAMPLES ============ -->
+  <div class="panel" id="examples">
+    <div class="card">
+      <h2 style="margin-top:0">Worked examples from the AWS pricing page</h2>
+      <p class="note">Reproduced from the <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent pricing page</a>. Every activity bills at <b>$0.0083 / agent-second</b> — equivalently <b>$0.498 / agent-minute</b> or <b>$29.88 / agent-hour</b>.</p>
+      <table>
+        <thead><tr><th>Example</th><th>Usage per month</th><th>Monthly charge</th></tr></thead>
+        <tbody>
+          <tr><td>1 — Small team</td><td>10 investigations × 8 min</td><td>$39.84</td></tr>
+          <tr><td>2 — Active team</td><td>80 investigations × 8 min ($318.72) + 100 on-demand tasks × 30 s ($24.90)</td><td>$343.62</td></tr>
+          <tr><td>3 — Enterprise</td><td>500 investigations × 8 min ($1,992.00) + 40 evaluations × 15 min ($298.80) + 30 custom SRE agents × 5 min ($74.70)</td><td>$2,365.50</td></tr>
+          <tr><td>4 — Daily custom agent</td><td>30 runs × 2 min (daily ops report)</td><td>$29.88</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Support credit offset examples</h2>
+      <p class="note">Monthly credit = plan % × prior-month AWS Support charge. Credits apply toward DevOps Agent usage at $0.0083/agent-second and expire at month-end if unused.</p>
+      <table>
+        <thead><tr><th>Plan</th><th>Monthly Support charge</th><th>Credit rate</th><th>Monthly credit value</th></tr></thead>
+        <tbody>
+          <tr><td>Business+</td><td>$1,000</td><td>30%</td><td>$300</td></tr>
+          <tr><td>Enterprise</td><td>$10,000</td><td>75%</td><td>$7,500</td></tr>
+          <tr><td>Unified Operations</td><td>$100,000</td><td>100%</td><td>$100,000</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card" style="background:#f7f9fb;margin-top:16px">
+        <b>Verify with the official AWS tools</b>
+        <p class="src" style="margin-top:6px">This file is a fast estimator for planning. For authoritative pricing and formal cost estimates, use the
+        <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent pricing page</a> and the
+        <a href="https://calculator.aws/">AWS Pricing Calculator</a>.</p>
+      </div>
+      <p class="note" style="margin-top:10px">New customers also get a 2-month free trial (per month: 20 h investigations, 15 h evaluations, 20 h on-demand SRE tasks). Pay-as-you-go applies beyond those limits and after the trial.</p>
+    </div>
+  </div>
+
+  <!-- ============ BASIS ============ -->
+  <div class="panel" id="basis">
+    <div class="card">
+      <h2 style="margin-top:0">Pricing basis &amp; assumptions</h2>
+      <p class="src">
+        <b>Rate.</b> All DevOps Agent activity is billed at <b>$0.0083 per agent-second</b> — Investigations (Incident Response), Evaluations (Site Reliability), and On-demand SRE tasks (Chat &amp; Custom SRE Agents) share the one rate. Agent-time is cumulative active working time per task; idle/waiting time is not billed.<br>
+        Source: <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent Pricing</a>.
+      </p>
+      <p class="src" style="margin-top:12px">
+        <b>Support credit offset.</b> Customers on paid Support plans receive monthly DevOps Agent credits = <b>plan % × prior-month AWS Support charge</b>: <b>100%</b> Unified Operations, <b>75%</b> Enterprise, <b>30%</b> Business+. Credits apply toward usage at $0.0083/agent-second, are issued by the 10th of the month, and <b>expire month-end if unused</b> (the "credit wasted" figure).<br>
+        Source: <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent Pricing</a> (Credits for AWS Support Customers).
+      </p>
+      <p class="src" style="margin-top:12px">
+        <b>Free trial (not modelled above).</b> New DevOps Agent customers get a 2-month trial; each trial month includes up to 10 agent spaces, 20 hours of investigations, 15 hours of evaluations, and 20 hours of on-demand SRE tasks. Pay-as-you-go applies beyond those limits / after the trial.
+      </p>
+      <p class="src" style="margin-top:12px">
+        <b>Category mapping.</b> "Code review" is billed under <span class="badge b-eval">Evaluations</span> (validating deployment of code changes / incident prevention). "Custom-agent runs" and "Chats" are billed under <span class="badge b-sre">On-demand SRE tasks</span>. This calculator keeps them as separate planning rows for clarity; all bill at the same rate.
+      </p>
+      <p class="src" style="margin-top:12px">
+        <b>Default durations</b> come from the worked examples on the pricing page: investigations ~8 min, evaluations ~15 min, chats ~0.5 min, custom-agent runs ~2 min. Code review defaults to 5 min (editable — no official example). <b>Excluded:</b> connected-service charges (CloudWatch Logs Insights queries, trace retrievals) are billed separately at standard rates and are not in these figures.
+      </p>
+      <p class="note" style="margin-top:14px">Estimates based on public AWS pricing as of September 2026. The $0.0083/agent-second rate, Support-credit percentages, and free-trial terms can change — confirm current pricing at the <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent pricing page</a> and the <a href="https://calculator.aws/">AWS Pricing Calculator</a>, and check actual agent-second usage in Cost &amp; Usage Reports, before making commitments.</p>
+    </div>
+  </div>
+  <footer style="margin-top:26px;padding:16px 20px;border-top:2px solid var(--line);font-size:12px;color:var(--muted);line-height:1.6">
+    <b style="color:var(--txt)">Estimates only.</b> Based on public AWS pricing as of September 2026 — rates, Support-credit percentages, and trial terms can change. Confirm current pricing at the <a href="https://aws.amazon.com/devops-agent/pricing/" style="color:var(--blue)">AWS DevOps Agent pricing page</a> and the <a href="https://calculator.aws/" style="color:var(--blue)">AWS Pricing Calculator</a>, and verify actual usage in Cost &amp; Usage Reports, before making commitments. This file runs entirely in your browser and sends no data anywhere.
+  </footer>
+</div>
+
+<script>
+const RATE = 0.0083;
+const $ = s => document.querySelector(s);
+const fmt = n => '$'+(Math.round(n*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = n => '$'+Math.round(n).toLocaleString('en-US');
+const int = n => Math.round(n).toLocaleString('en-US');
+
+// activity type -> {category, badge, default vol, default duration min, color}
+const ACT = [
+  {key:'cr',  name:'Code review',       cat:'Evaluations',    badge:'b-eval', vol:400, dur:5,  color:'#ec7211', primary:true},
+  {key:'inv', name:'Investigations',    cat:'Incident Resp.', badge:'b-inv',  vol:80,  dur:8,  color:'#0972d3'},
+  {key:'ev',  name:'Evaluations',       cat:'Site Reliability',badge:'b-eval',vol:40,  dur:15, color:'#ec7211'},
+  {key:'ch',  name:'On-demand chats',   cat:'On-demand SRE',  badge:'b-sre',  vol:200, dur:0.5,color:'#1a8754'},
+  {key:'ca',  name:'Custom-agent runs', cat:'On-demand SRE',  badge:'b-sre',  vol:30,  dur:2,  color:'#1a8754'},
+];
+const state = {act:JSON.parse(JSON.stringify(ACT))};
+let teams = [
+  {name:'Platform',   cr:180, inv:35, ev:18, ch:90, ca:15},
+  {name:'Payments',   cr:140, inv:30, ev:14, ch:70, ca:10},
+  {name:'Data/ML',    cr:80,  inv:15, ev:8,  ch:40, ca:5},
+];
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); $('#'+t.dataset.t).classList.add('active');
+  if(t.dataset.t==='proj') renderProjection();
+  if(t.dataset.t==='teams') renderTeams();
+});
+
+// ---------- calculator ----------
+function activityCosts(){
+  return state.act.map(a=>{
+    const secs = a.vol * a.dur * 60;
+    return {...a, secs, cost: secs*RATE};
+  });
+}
+function creditValue(){ return parseFloat($('#plan').value) * (parseFloat($('#support').value)||0); }
+
+function renderActivity(){
+  const rows = activityCosts();
+  const tb = $('#activity tbody'); tb.innerHTML='';
+  let tv=0,ts=0,tc=0;
+  rows.forEach((a,i)=>{
+    tv+=a.vol; ts+=a.secs; tc+=a.cost;
+    const tr=document.createElement('tr');
+    if(a.primary) tr.className='primary-row';
+    tr.innerHTML=`<td>${a.name}</td>
+      <td><span class="badge ${a.badge}">${a.cat}</span></td>
+      <td><input type="number" value="${a.vol}" min="0" data-i="${i}" data-f="vol"></td>
+      <td><input type="number" value="${a.dur}" min="0" step="0.5" data-i="${i}" data-f="dur"></td>
+      <td>${int(a.secs)}</td><td>${fmt(a.cost)}</td>`;
+    tb.appendChild(tr);
+  });
+  $('#tv').textContent=int(tv); $('#ts').textContent=int(ts); $('#tc').textContent=fmt(tc);
+  tb.querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+    state.act[inp.dataset.i][inp.dataset.f]=parseFloat(inp.value)||0; renderAll();
+  });
+  return {gross:tc, rows};
+}
+
+function renderKPIs(gross){
+  const credit=creditValue();
+  const applied=Math.min(gross,credit);
+  const net=gross-applied;
+  const waste=Math.max(0,credit-applied);
+  $('#kpis').innerHTML=`
+    <div class="card kpi gross"><div class="label">Gross monthly</div><div class="value">${fmt0(gross)}</div><div class="sub">${int(gross/RATE/3600)} agent-hours</div></div>
+    <div class="card kpi credit"><div class="label">Support credit</div><div class="value">${fmt0(credit)}</div><div class="sub">${(parseFloat($('#plan').value)*100)}% of support charge</div></div>
+    <div class="card kpi net"><div class="label">Net monthly</div><div class="value">${fmt0(net)}</div><div class="sub">after credit offset</div></div>
+    <div class="card kpi waste"><div class="label">Credit wasted</div><div class="value">${fmt0(waste)}</div><div class="sub">${waste>0?'expires month-end':'fully utilised'}</div></div>`;
+  $('#credit-note').textContent = credit>=gross
+    ? `Credit fully covers usage — net $0. ${fmt0(credit-gross)} of credit expires unused this month.`
+    : `Credit covers ${Math.round(applied/gross*100)}% of gross usage; net ${fmt0(net)} is billed.`;
+  return {gross,credit,applied,net,waste};
+}
+
+// ---------- SVG charts ----------
+function barChart(el, data){ // [{name,cost,color}]
+  const W=470,H=210,pad=90,max=Math.max(...data.map(d=>d.cost),1),bw=(H-20)/data.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  data.forEach((d,i)=>{
+    const y=10+i*bw, w=(W-pad-70)*(d.cost/max);
+    s+=`<text x="${pad-6}" y="${y+bw/2+4}" text-anchor="end" font-size="11" fill="#5a6b7b">${d.name}</text>`;
+    s+=`<rect x="${pad}" y="${y+3}" width="${Math.max(w,1)}" height="${bw-10}" rx="3" fill="${d.color}"/>`;
+    s+=`<text x="${pad+w+6}" y="${y+bw/2+4}" font-size="11" font-weight="700" fill="#16212f">${fmt0(d.cost)}</text>`;
+  });
+  el.innerHTML=s+'</svg>';
+}
+function waterfall(el, m){ // gross, applied(credit), net
+  const W=470,H=210,base=170,max=Math.max(m.gross,1),sc=v=>(base-20)*(v/max);
+  const cols=[['Gross',m.gross,'#232f3e'],['Credit',-m.applied,'#0972d3'],['Net',m.net,'#1a8754']];
+  const bw=90,gap=60; let x=40,run=0,s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  s+=`<line x1="30" y1="${base}" x2="${W-10}" y2="${base}" stroke="#e3e8ee"/>`;
+  cols.forEach((c,i)=>{
+    let h,y;
+    if(i===0){h=sc(c[1]);y=base-h;run=c[1];}
+    else if(i===1){h=sc(Math.abs(c[1]));y=base-sc(run);run+=c[1];}
+    else{h=sc(c[1]);y=base-h;}
+    s+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="${c[2]}"/>`;
+    s+=`<text x="${x+bw/2}" y="${base+16}" text-anchor="middle" font-size="11" fill="#5a6b7b">${c[0]}</text>`;
+    s+=`<text x="${x+bw/2}" y="${y-6}" text-anchor="middle" font-size="11" font-weight="700" fill="#16212f">${fmt0(Math.abs(c[1]))}</text>`;
+    x+=bw+gap;
+  });
+  el.innerHTML=s+'</svg>';
+}
+
+// ---------- teams ----------
+function teamGross(t){ // uses current durations from state.act
+  const d=k=>state.act.find(a=>a.key===k).dur*60*RATE;
+  return t.cr*d('cr')+t.inv*d('inv')+t.ev*d('ev')+t.ch*d('ch')+t.ca*d('ca');
+}
+function renderTeams(){
+  const tb=$('#teamtbl tbody'); tb.innerHTML='';
+  const grosses=teams.map(teamGross); const totalGross=grosses.reduce((a,b)=>a+b,0)||1;
+  const credit=creditValue(); const appliedTotal=Math.min(totalGross,credit);
+  let tot={cr:0,inv:0,ev:0,ch:0,ca:0,gr:0,net:0};
+  teams.forEach((t,i)=>{
+    const g=grosses[i]; const net=g-(appliedTotal*(g/totalGross));
+    ['cr','inv','ev','ch','ca'].forEach(k=>tot[k]+=t[k]); tot.gr+=g; tot.net+=net;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input value="${t.name}" data-i="${i}" data-f="name" style="width:120px"></td>
+      ${['cr','inv','ev','ch','ca'].map(k=>`<td><input type="number" value="${t[k]}" min="0" data-i="${i}" data-f="${k}" style="width:80px"></td>`).join('')}
+      <td>${fmt0(g)}</td><td>${fmt0(net)}</td><td><button class="rm" data-rm="${i}">×</button></td>`;
+    tb.appendChild(tr);
+  });
+  $('#tt-cr').textContent=int(tot.cr);$('#tt-inv').textContent=int(tot.inv);$('#tt-ev').textContent=int(tot.ev);
+  $('#tt-ch').textContent=int(tot.ch);$('#tt-ca').textContent=int(tot.ca);
+  $('#tt-gr').textContent=fmt0(tot.gr);$('#tt-net').textContent=fmt0(tot.net);
+  tb.querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+    const f=inp.dataset.f; teams[inp.dataset.i][f]= f==='name'?inp.value:(parseFloat(inp.value)||0);
+    renderTeams();
+  });
+  tb.querySelectorAll('.rm').forEach(b=>b.onclick=()=>{teams.splice(b.dataset.rm,1);renderTeams();});
+  barChart($('#teamchart'), teams.map((t,i)=>({name:t.name,cost:grosses[i],color:'#ec7211'})));
+}
+$('#addteam').onclick=()=>{teams.push({name:'New team',cr:0,inv:0,ev:0,ch:0,ca:0});renderTeams();};
+
+// ---------- projection ----------
+function renderProjection(){
+  const g=(parseFloat($('#growth').value)||0)/100;
+  const all=$('#growall').value==='1';
+  const scg=(parseFloat($('#scgrowth').value)||0)/100;
+  const plan=parseFloat($('#plan').value); const sc0=parseFloat($('#support').value)||0;
+  const base=activityCosts();
+  const tb=$('#projtbl tbody'); tb.innerHTML='';
+  const pts=[]; let TG=0,TN=0,TW=0;
+  for(let m=0;m<12;m++){
+    let gross=0,cr=0;
+    base.forEach(a=>{
+      const factor = a.key==='cr' ? Math.pow(1+g,m) : (all?Math.pow(1+g,m):1);
+      const secs=a.vol*factor*a.dur*60; gross+=secs*RATE;
+      if(a.key==='cr') cr=a.vol*factor;
+    });
+    const credit=plan*sc0*Math.pow(1+scg,m);
+    const applied=Math.min(gross,credit); const net=gross-applied; const waste=Math.max(0,credit-applied);
+    TG+=gross;TN+=net;TW+=waste; pts.push({gross,net,credit});
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>M${m+1}</td><td>${int(cr)}</td><td>${fmt0(gross)}</td><td>${fmt0(credit)}</td><td>${fmt0(net)}</td><td>${fmt0(waste)}</td>`;
+    tb.appendChild(tr);
+  }
+  $('#p-gr').textContent=fmt0(TG);$('#p-net').textContent=fmt0(TN);$('#p-waste').textContent=fmt0(TW);
+  lineChart($('#linechart'),pts);
+}
+function lineChart(el,pts){
+  const W=1100,H=280,padL=70,padB=30,padT=15,padR=15;
+  const max=Math.max(...pts.flatMap(p=>[p.gross,p.net,p.credit]),1);
+  const x=i=>padL+(W-padL-padR)*(i/(pts.length-1));
+  const y=v=>padT+(H-padT-padB)*(1-v/max);
+  const line=(key,col)=>{
+    const d=pts.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.5"/>`+
+      pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p[key]).toFixed(1)}" r="3" fill="${col}"/>`).join('');
+  };
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for(let g=0;g<=4;g++){const gy=padT+(H-padT-padB)*(g/4);s+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="#eef2f6"/><text x="${padL-8}" y="${gy+4}" text-anchor="end" font-size="10" fill="#8a99a8">${fmt0(max*(1-g/4))}</text>`;}
+  pts.forEach((p,i)=>{s+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#8a99a8">M${i+1}</text>`;});
+  s+=line('credit','#0972d3')+line('gross','#232f3e')+line('net','#1a8754');
+  el.innerHTML=s+'</svg>';
+}
+
+// ---------- orchestrate ----------
+function renderAll(){
+  const {gross}=renderActivity();
+  const m=renderKPIs(gross);
+  barChart($('#barchart'), activityCosts().map(a=>({name:a.name,cost:a.cost,color:a.color})));
+  waterfall($('#waterfall'), m);
+  if($('#teams').classList.contains('active')) renderTeams();
+  if($('#proj').classList.contains('active')) renderProjection();
+}
+['plan','support'].forEach(id=>$('#'+id).oninput=renderAll);
+['growth','growall','scgrowth'].forEach(id=>$('#'+id).oninput=renderProjection);
+renderAll();
+</script>
+</body>
+</html>
