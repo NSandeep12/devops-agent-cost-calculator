@@ -6,7 +6,7 @@ An interactive, single-file calculator for estimating [AWS DevOps Agent](https:/
 
 It's a single self-contained HTML file — no dependencies, no tracking, no network calls. It runs entirely in your browser, so you can download it and share it freely.
 
-![Cost calculator — main view](previews/01-calculator.png)
+![Cost calculator — main view](calculator-previews/01-calculator.png)
 
 ## How it works
 

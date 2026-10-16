@@ -1,0 +1,62 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0}</style></head><body>
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica Neue,Helvetica,Arial,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#243244"/>
+      <stop offset="1" stop-color="#141d29"/>
+    </linearGradient>
+    <linearGradient id="or" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff9900"/>
+      <stop offset="1" stop-color="#ec7211"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- right-side "autonomous agent" motif: concentric rings + orbiting nodes -->
+  <g transform="translate(1010,250)">
+    <circle r="185" fill="none" stroke="#ff9900" stroke-opacity="0.08" stroke-width="2"/>
+    <circle r="135" fill="none" stroke="#ff9900" stroke-opacity="0.14" stroke-width="2"/>
+    <circle r="88"  fill="none" stroke="#ff9900" stroke-opacity="0.22" stroke-width="2"/>
+    <!-- connectors -->
+    <g stroke="#ff9900" stroke-opacity="0.5" stroke-width="2">
+      <line x1="0" y1="0" x2="88" y2="-8"/>
+      <line x1="0" y1="0" x2="-70" y2="70"/>
+      <line x1="0" y1="0" x2="30" y2="128"/>
+      <line x1="0" y1="0" x2="-120" y2="-40"/>
+    </g>
+    <!-- satellite nodes -->
+    <g fill="#ff9900">
+      <circle cx="88"  cy="-8"  r="9"/>
+      <circle cx="-70" cy="70"  r="9"/>
+      <circle cx="30"  cy="128" r="9"/>
+      <circle cx="-120" cy="-40" r="9"/>
+    </g>
+    <!-- core -->
+    <circle r="26" fill="#ff9900"/>
+    <circle r="26" fill="none" stroke="#141d29" stroke-width="6"/>
+  </g>
+
+  <!-- rising cost line motif, lower area -->
+  <polyline points="80,560 250,545 420,552 590,520 760,500 930,470 1120,430"
+            fill="none" stroke="#4a90d9" stroke-opacity="0.55" stroke-width="3"/>
+  <g fill="#4a90d9" fill-opacity="0.7">
+    <circle cx="420" cy="552" r="4"/><circle cx="760" cy="500" r="4"/><circle cx="1120" cy="430" r="4"/>
+  </g>
+
+  <!-- left brand accent -->
+  <rect x="0" y="0" width="12" height="630" fill="url(#or)"/>
+
+  <!-- title -->
+  <text x="76" y="240" font-size="82" font-weight="800" letter-spacing="-1">
+    <tspan fill="#ff9900">AWS</tspan><tspan fill="#ffffff"> DevOps Agent</tspan>
+  </text>
+
+  <!-- subtitle -->
+  <text x="80" y="312" fill="#eaf0f6" font-size="40" font-weight="600">What does it cost?</text>
+  <text x="80" y="364" fill="#9fb0c0" font-size="27" font-weight="400">An interactive calculator to make the pricing predictable.</text>
+
+  <!-- CTA button -->
+  <rect x="80" y="420" width="560" height="64" rx="32" fill="url(#or)"/>
+  <text x="114" y="461" fill="#141d29" font-size="27" font-weight="800">Find &amp; predict your team's cost  &#8594;</text>
+</svg></body></html>

@@ -36,8 +36,6 @@
   th:first-child,td:first-child{text-align:left}
   thead th{background:#f7f9fb;color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.4px}
   tfoot td{font-weight:700;background:#fbfcfd;border-top:2px solid var(--line)}
-  .primary-row{background:#fff8ec}
-  .primary-row td:first-child::after{content:" ★ primary driver";color:var(--orange-d);font-size:10.5px;font-weight:700;letter-spacing:.3px}
   input,select{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%;background:#fff;color:var(--txt)}
   input[type=number]{text-align:right}
   .ctl{display:grid;grid-template-columns:1fr 130px;gap:10px 14px;align-items:center;max-width:460px}
@@ -90,11 +88,25 @@
           <option value="0.75" selected>Enterprise — 75%</option>
           <option value="0.30">Business+ — 30%</option>
           <option value="0">No paid plan — 0%</option>
+          <option value="custom">Custom (PLS / MSP) — enter %</option>
         </select>
+        <label id="custompct-label" style="display:none">Custom credit % (PLS / MSP)</label>
+        <input type="number" id="custompct" value="50" min="0" max="100" step="1" style="display:none">
         <label>Monthly AWS Support charge ($)</label>
         <input type="number" id="support" value="10000" min="0" step="500">
       </div>
       <p class="note" id="credit-note"></p>
+    </div>
+
+    <h2>Code-review large-diff tail <span class="hint">— a few big diffs run far longer than the median; model the tail so the average doesn't understate cost</span></h2>
+    <div class="card">
+      <div class="ctl">
+        <label>Large diffs (% of code reviews)</label>
+        <input type="number" id="crlargepct" value="10" min="0" max="100" step="1">
+        <label>Large-diff avg duration (min)</label>
+        <input type="number" id="crlargedur" value="20" min="0" step="1">
+      </div>
+      <p class="note">Effective code-review minutes = (1 − large%) × typical duration + large% × large-diff duration. Set large% to 0 to model a single average only. Applies to the code-review row (and each team's code reviews).</p>
     </div>
 
     <h2>Monthly activity volumes <span class="hint">— code review is the primary driver; durations are editable assumptions</span></h2>
@@ -211,7 +223,7 @@
         Source: <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent Pricing</a>.
       </p>
       <p class="src" style="margin-top:12px">
-        <b>Support credit offset.</b> Customers on paid Support plans receive monthly DevOps Agent credits = <b>plan % × prior-month AWS Support charge</b>: <b>100%</b> Unified Operations, <b>75%</b> Enterprise, <b>30%</b> Business+. Credits apply toward usage at $0.0083/agent-second, are issued by the 10th of the month, and <b>expire month-end if unused</b> (the "credit wasted" figure).<br>
+        <b>Support credit offset.</b> Customers on paid Support plans receive monthly DevOps Agent credits = <b>plan % × prior-month AWS Support charge</b>: <b>100%</b> Unified Operations, <b>75%</b> Enterprise, <b>30%</b> Business+. Credits apply toward usage at $0.0083/agent-second, are issued by the 10th of the month, and <b>expire month-end if unused</b> (the "credit wasted" figure). <b>AWS Partner-Led Support (PLS) / MSP</b> customers receive credits through the partner process at a <b>custom discount %</b> that differs from Enterprise/UOps and is not public pricing — select <b>Custom (PLS / MSP)</b> in the plan dropdown and enter your own % to estimate. (These PLS percentages are intentionally not hardcoded, as they may not be official.)<br>
         Source: <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent Pricing</a> (Credits for AWS Support Customers).
       </p>
       <p class="src" style="margin-top:12px">
@@ -221,7 +233,7 @@
         <b>Category mapping.</b> "Code review" is billed under <span class="badge b-eval">Evaluations</span> (validating deployment of code changes / incident prevention). "Custom-agent runs" and "Chats" are billed under <span class="badge b-sre">On-demand SRE tasks</span>. This calculator keeps them as separate planning rows for clarity; all bill at the same rate.
       </p>
       <p class="src" style="margin-top:12px">
-        <b>Default durations</b> come from the worked examples on the pricing page: investigations ~8 min, evaluations ~15 min, chats ~0.5 min, custom-agent runs ~2 min. Code review defaults to 5 min (editable — no official example). <b>Excluded:</b> connected-service charges (CloudWatch Logs Insights queries, trace retrievals) are billed separately at standard rates and are not in these figures.
+        <b>Default durations</b> come from the worked examples on the pricing page: investigations ~8 min, evaluations ~15 min, chats ~0.5 min, custom-agent runs ~2 min. Code review defaults to 5 min (editable — no official example). Because code-review run-time is right-skewed — a few large diffs run several times longer than the median — the <b>large-diff tail</b> control blends a typical and a large-diff duration (effective = (1−large%)×typical + large%×large-diff) so a single average doesn't understate cost at real PR volume. <b>Excluded:</b> connected-service charges (CloudWatch Logs Insights queries, trace retrievals) are billed separately at standard rates and are not in these figures.
       </p>
       <p class="note" style="margin-top:14px">Estimates based on public AWS pricing as of September 2026. The $0.0083/agent-second rate, Support-credit percentages, and free-trial terms can change — confirm current pricing at the <a href="https://aws.amazon.com/devops-agent/pricing/">AWS DevOps Agent pricing page</a> and the <a href="https://calculator.aws/">AWS Pricing Calculator</a>, and check actual agent-second usage in Cost &amp; Usage Reports, before making commitments.</p>
     </div>
@@ -240,7 +252,7 @@ const int = n => Math.round(n).toLocaleString('en-US');
 
 // activity type -> {category, badge, default vol, default duration min, color}
 const ACT = [
-  {key:'cr',  name:'Code review',       cat:'Evaluations',    badge:'b-eval', vol:400, dur:5,  color:'#ec7211', primary:true},
+  {key:'cr',  name:'Code review',       cat:'Evaluations',    badge:'b-eval', vol:400, dur:5,  color:'#ec7211'},
   {key:'inv', name:'Investigations',    cat:'Incident Resp.', badge:'b-inv',  vol:80,  dur:8,  color:'#0972d3'},
   {key:'ev',  name:'Evaluations',       cat:'Site Reliability',badge:'b-eval',vol:40,  dur:15, color:'#ec7211'},
   {key:'ch',  name:'On-demand chats',   cat:'On-demand SRE',  badge:'b-sre',  vol:200, dur:0.5,color:'#1a8754'},
@@ -263,13 +275,17 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 });
 
 // ---------- calculator ----------
+function crTail(){ const pe=$('#crlargepct'), de=$('#crlargedur'); const p=Math.max(0,Math.min(100,(pe?parseFloat(pe.value):0)||0))/100; const d=Math.max(0,(de?parseFloat(de.value):0)||0); return {p,d}; }
+function effDur(a){ if(a.key==='cr'){ const t=crTail(); return (1-t.p)*a.dur + t.p*t.d; } return a.dur; }
 function activityCosts(){
   return state.act.map(a=>{
-    const secs = a.vol * a.dur * 60;
+    const secs = a.vol * effDur(a) * 60;
     return {...a, secs, cost: secs*RATE};
   });
 }
-function creditValue(){ return parseFloat($('#plan').value) * (parseFloat($('#support').value)||0); }
+function planPct(){ const v=$('#plan').value; if(v==='custom'){ let c=parseFloat($('#custompct').value); if(isNaN(c))c=0; return Math.max(0,Math.min(100,c))/100; } return parseFloat(v)||0; }
+function toggleCustom(){ const on=$('#plan').value==='custom'; $('#custompct').style.display=on?'':'none'; $('#custompct-label').style.display=on?'':'none'; }
+function creditValue(){ return planPct() * (parseFloat($('#support').value)||0); }
 
 function renderActivity(){
   const rows = activityCosts();
@@ -278,7 +294,6 @@ function renderActivity(){
   rows.forEach((a,i)=>{
     tv+=a.vol; ts+=a.secs; tc+=a.cost;
     const tr=document.createElement('tr');
-    if(a.primary) tr.className='primary-row';
     tr.innerHTML=`<td>${a.name}</td>
       <td><span class="badge ${a.badge}">${a.cat}</span></td>
       <td><input type="number" value="${a.vol}" min="0" data-i="${i}" data-f="vol"></td>
@@ -300,7 +315,7 @@ function renderKPIs(gross){
   const waste=Math.max(0,credit-applied);
   $('#kpis').innerHTML=`
     <div class="card kpi gross"><div class="label">Gross monthly</div><div class="value">${fmt0(gross)}</div><div class="sub">${int(gross/RATE/3600)} agent-hours</div></div>
-    <div class="card kpi credit"><div class="label">Support credit</div><div class="value">${fmt0(credit)}</div><div class="sub">${(parseFloat($('#plan').value)*100)}% of support charge</div></div>
+    <div class="card kpi credit"><div class="label">Support credit</div><div class="value">${fmt0(credit)}</div><div class="sub">${(planPct()*100).toFixed(0)}% of support charge</div></div>
     <div class="card kpi net"><div class="label">Net monthly</div><div class="value">${fmt0(net)}</div><div class="sub">after credit offset</div></div>
     <div class="card kpi waste"><div class="label">Credit wasted</div><div class="value">${fmt0(waste)}</div><div class="sub">${waste>0?'expires month-end':'fully utilised'}</div></div>`;
   $('#credit-note').textContent = credit>=gross
@@ -341,7 +356,7 @@ function waterfall(el, m){ // gross, applied(credit), net
 
 // ---------- teams ----------
 function teamGross(t){ // uses current durations from state.act
-  const d=k=>state.act.find(a=>a.key===k).dur*60*RATE;
+  const d=k=>effDur(state.act.find(a=>a.key===k))*60*RATE;
   return t.cr*d('cr')+t.inv*d('inv')+t.ev*d('ev')+t.ch*d('ch')+t.ca*d('ca');
 }
 function renderTeams(){
@@ -375,7 +390,7 @@ function renderProjection(){
   const g=(parseFloat($('#growth').value)||0)/100;
   const all=$('#growall').value==='1';
   const scg=(parseFloat($('#scgrowth').value)||0)/100;
-  const plan=parseFloat($('#plan').value); const sc0=parseFloat($('#support').value)||0;
+  const plan=planPct(); const sc0=parseFloat($('#support').value)||0;
   const base=activityCosts();
   const tb=$('#projtbl tbody'); tb.innerHTML='';
   const pts=[]; let TG=0,TN=0,TW=0;
@@ -383,7 +398,7 @@ function renderProjection(){
     let gross=0,cr=0;
     base.forEach(a=>{
       const factor = a.key==='cr' ? Math.pow(1+g,m) : (all?Math.pow(1+g,m):1);
-      const secs=a.vol*factor*a.dur*60; gross+=secs*RATE;
+      const secs=a.vol*factor*effDur(a)*60; gross+=secs*RATE;
       if(a.key==='cr') cr=a.vol*factor;
     });
     const credit=plan*sc0*Math.pow(1+scg,m);
@@ -422,7 +437,8 @@ function renderAll(){
   if($('#teams').classList.contains('active')) renderTeams();
   if($('#proj').classList.contains('active')) renderProjection();
 }
-['plan','support'].forEach(id=>$('#'+id).oninput=renderAll);
+['plan','support','custompct','crlargepct','crlargedur'].forEach(id=>$('#'+id).oninput=renderAll);
+$('#plan').addEventListener('change',toggleCustom); toggleCustom();
 ['growth','growall','scgrowth'].forEach(id=>$('#'+id).oninput=renderProjection);
 renderAll();
 </script>
